@@ -150,14 +150,14 @@ def filter_boxes_inside_shape(boxes, shape):
 def get_mask_single_inner(curr_damage_anchors_batch, house_bboxes, iou_thr):
     # iou_matrix = pairwise_iou(curr_damage_anchors_batch, house_bboxes)
     iou_matrix = pairwise_inner(curr_damage_anchors_batch, house_bboxes)
-    iou_max = tf.math.reduce_max(iou_matrix, axis=1)
+    iou_max = tf.math.reduce_max(input_tensor=iou_matrix, axis=1)
     mask = tf.greater(iou_max, tf.constant(iou_thr, dtype=tf.float32))
     return mask
 
 
 def get_mask_single_iou(curr_damage_anchors_batch, house_bboxes, iou_thr):
     iou_matrix = pairwise_iou(curr_damage_anchors_batch, house_bboxes)
-    iou_max = tf.math.reduce_max(iou_matrix, axis=1)
+    iou_max = tf.math.reduce_max(input_tensor=iou_matrix, axis=1)
     mask = tf.greater(iou_max, tf.constant(iou_thr, dtype=tf.float32))
     return mask
 
@@ -172,7 +172,7 @@ def filter_anchors_inner(house_bboxes, damage_anchors, iou_thr):
         # print("ori_shape = ", ori_shape)
         curr_damage_anchors = np.reshape(curr_damage_anchors, (-1, 4))
         batch_size = 21 * 21 * 3
-        all_mask = tf.convert_to_tensor([], dtype=tf.float64)
+        all_mask = tf.convert_to_tensor(value=[], dtype=tf.float64)
         for i in range(curr_damage_anchors.shape[0] // batch_size):
             curr_mask = get_mask_single_inner(curr_damage_anchors[batch_size * i : batch_size * (i+1)], house_bboxes, iou_thr)
             if i == 0:

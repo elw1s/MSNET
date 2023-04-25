@@ -1,5 +1,5 @@
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
+tf.compat.v1.disable_v2_behavior()
 
 import sys
 sys.path.append("")
@@ -33,21 +33,21 @@ def main():
     main_path = FLAGS.feature_pick_path
 
     with tf.device('/device:GPU:0'):
-        x_2 = tf.placeholder(tf.float32, [None, None, 256], name='x')
-        pos_2 = tf.placeholder(tf.float32, [None, None, 256], name='pos')
-        neg_2 = tf.placeholder(tf.float32, [None, None, 256], name='neg')
+        x_2 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='x')
+        pos_2 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='pos')
+        neg_2 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='neg')
 
-        x_3 = tf.placeholder(tf.float32, [None, None, 256], name='x')
-        pos_3 = tf.placeholder(tf.float32, [None, None, 256], name='pos')
-        neg_3 = tf.placeholder(tf.float32, [None, None, 256], name='neg')
+        x_3 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='x')
+        pos_3 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='pos')
+        neg_3 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='neg')
 
-        x_4 = tf.placeholder(tf.float32, [None, None, 256], name='x')
-        pos_4 = tf.placeholder(tf.float32, [None, None, 256], name='pos')
-        neg_4 = tf.placeholder(tf.float32, [None, None, 256], name='neg')
+        x_4 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='x')
+        pos_4 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='pos')
+        neg_4 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='neg')
 
-        x_5 = tf.placeholder(tf.float32, [None, None, 256], name='x')
-        pos_5 = tf.placeholder(tf.float32, [None, None, 256], name='pos')
-        neg_5 = tf.placeholder(tf.float32, [None, None, 256], name='neg')
+        x_5 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='x')
+        pos_5 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='pos')
+        neg_5 = tf.compat.v1.placeholder(tf.float32, [None, None, 256], name='neg')
 
         fc_model_train = define_model()
 
@@ -71,11 +71,11 @@ def main():
                                  pos_pred_3, neg_pred_3, x_pred_4, pos_pred_4,
                                  neg_pred_4, x_pred_5, pos_pred_5, neg_pred_5)
 
-        train_op = tf.train.AdamOptimizer().minimize(loss)
+        train_op = tf.compat.v1.train.AdamOptimizer().minimize(loss)
 
 
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+    with tf.compat.v1.Session() as sess:
+        sess.run(tf.compat.v1.global_variables_initializer())
 
         if FLAGS.restore_flag:
             fc_model_train.load_weights(FLAGS.model_restore_path)

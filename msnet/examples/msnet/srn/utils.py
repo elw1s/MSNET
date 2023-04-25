@@ -23,7 +23,7 @@ def reshape_features_chw(feature_0, feature_1, feature_2, feature_3):
 
 def reshape_features_hwc(feature):
     # Convert each feature map from CxHxW to HxWxC
-    feature_0 = tf.transpose(feature, [1, 2, 0])
+    feature_0 = tf.transpose(a=feature, perm=[1, 2, 0])
     return feature_0
 
 def DEFINE_string(name, default_value, doc_string):

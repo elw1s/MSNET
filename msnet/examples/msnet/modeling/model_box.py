@@ -33,7 +33,7 @@ def decode_bbox_target(box_predictions, anchors):
     Returns:
         box_decoded: (..., 4), float32. With the same shape.
     """
-    orig_shape = tf.shape(anchors)
+    orig_shape = tf.shape(input=anchors)
     box_pred_txtytwth = tf.reshape(box_predictions, (-1, 2, 2))
     box_pred_txty, box_pred_twth = tf.split(box_pred_txtytwth, 2, axis=1)
     # each is (...)x1x2
@@ -74,9 +74,9 @@ def encode_bbox_target(boxes, anchors):
 
     # Note that here not all boxes are valid. Some may be zero
     txty = (xbyb - xaya) / waha
-    twth = tf.log(wbhb / waha)  # may contain -inf for invalid boxes
+    twth = tf.math.log(wbhb / waha)  # may contain -inf for invalid boxes
     encoded = tf.concat([txty, twth], axis=1)  # (-1x2x2)
-    return tf.reshape(encoded, tf.shape(boxes))
+    return tf.reshape(encoded, tf.shape(input=boxes))
 
 
 @under_name_scope()
@@ -98,7 +98,7 @@ def crop_and_resize(image, boxes, box_ind, crop_size, pad_border=True):
     # TF's crop_and_resize produces zeros on border
     if pad_border:
         # this can be quite slow
-        image = tf.pad(image, [[0, 0], [0, 0], [1, 1], [1, 1]], mode='SYMMETRIC')
+        image = tf.pad(tensor=image, paddings=[[0, 0], [0, 0], [1, 1], [1, 1]], mode='SYMMETRIC')
         boxes = boxes + 1
 
     @under_name_scope()
@@ -134,14 +134,14 @@ def crop_and_resize(image, boxes, box_ind, crop_size, pad_border=True):
 
         return tf.concat([ny0, nx0, ny0 + nh, nx0 + nw], axis=1)
 
-    image_shape = tf.shape(image)[2:]
+    image_shape = tf.shape(input=image)[2:]
 
     boxes = transform_fpcoor_for_tf(boxes, image_shape, [crop_size, crop_size])
-    image = tf.transpose(image, [0, 2, 3, 1])   # nhwc
+    image = tf.transpose(a=image, perm=[0, 2, 3, 1])   # nhwc
     ret = tf.image.crop_and_resize(
         image, boxes, tf.cast(box_ind, tf.int32),
         crop_size=[crop_size, crop_size])
-    ret = tf.transpose(ret, [0, 3, 1, 2])   # ncss
+    ret = tf.transpose(a=ret, perm=[0, 3, 1, 2])   # ncss
     return ret
 
 
@@ -159,12 +159,12 @@ def roi_align(featuremap, boxes, resolution):
     # sample 4 locations per roi bin
     ret = crop_and_resize(
         featuremap, boxes,
-        tf.zeros([tf.shape(boxes)[0]], dtype=tf.int32),
+        tf.zeros([tf.shape(input=boxes)[0]], dtype=tf.int32),
         resolution * 2)
     try:
         avgpool = tf.nn.avg_pool2d
     except AttributeError:
-        avgpool = tf.nn.avg_pool
+        avgpool = tf.nn.avg_pool2d
     ret = avgpool(ret, [1, 1, 2, 2], [1, 1, 2, 2], padding='SAME', data_format='NCHW')
     return ret
 
@@ -186,7 +186,7 @@ class RPNAnchors(namedtuple('_RPNAnchors', ['boxes', 'gt_labels', 'gt_boxes'])):
         """
         Slice anchors to the spatial size of this featuremap.
         """
-        shape2d = tf.shape(featuremap)[2:]  # h,w
+        shape2d = tf.shape(input=featuremap)[2:]  # h,w
         slice3d = tf.concat([shape2d, [-1]], axis=0)
         slice4d = tf.concat([shape2d, [-1, -1]], axis=0)
         boxes = tf.slice(self.boxes, [0, 0, 0, 0], slice4d)

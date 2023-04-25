@@ -35,11 +35,11 @@ def fpn_model(features):
     def upsample2x(name, x):
         try:
             resize = tf.compat.v2.image.resize_images
-            with tf.name_scope(name):
-                shp2d = tf.shape(x)[2:]
-                x = tf.transpose(x, [0, 2, 3, 1])
+            with tf.compat.v1.name_scope(name):
+                shp2d = tf.shape(input=x)[2:]
+                x = tf.transpose(a=x, perm=[0, 2, 3, 1])
                 x = resize(x, shp2d * 2, 'nearest')
-                x = tf.transpose(x, [0, 3, 1, 2])
+                x = tf.transpose(a=x, perm=[0, 3, 1, 2])
                 return x
         except AttributeError:
             return FixedUnPooling(
@@ -48,7 +48,7 @@ def fpn_model(features):
 
     with argscope(Conv2D, data_format='channels_first',
                   activation=tf.identity, use_bias=True,
-                  kernel_initializer=tf.variance_scaling_initializer(scale=1.)):
+                  kernel_initializer=tf.compat.v1.variance_scaling_initializer(scale=1.)):
         lat_2345 = [Conv2D('lateral_1x1_c{}'.format(i + 2), c, num_channel, 1)
                     for i, c in enumerate(features)]
         if use_gn:
@@ -84,17 +84,17 @@ def fpn_map_rois_to_levels(boxes):
     """
     sqrtarea = tf.sqrt(tf_area(boxes))
     level = tf.cast(tf.floor(
-        4 + tf.log(sqrtarea * (1. / 224) + 1e-6) * (1.0 / np.log(2))), tf.int32)
+        4 + tf.math.log(sqrtarea * (1. / 224) + 1e-6) * (1.0 / np.log(2))), tf.int32)
 
     # RoI levels range from 2~5 (not 6)
     level_ids = [
-        tf.where(level <= 2),
-        tf.where(tf.equal(level, 3)),   # == is not supported
-        tf.where(tf.equal(level, 4)),
-        tf.where(level >= 5)]
+        tf.compat.v1.where(level <= 2),
+        tf.compat.v1.where(tf.equal(level, 3)),   # == is not supported
+        tf.compat.v1.where(tf.equal(level, 4)),
+        tf.compat.v1.where(level >= 5)]
     level_ids = [tf.reshape(x, [-1], name='roi_level{}_id'.format(i + 2))
                  for i, x in enumerate(level_ids)]
-    num_in_levels = [tf.size(x, name='num_roi_level{}'.format(i + 2))
+    num_in_levels = [tf.size(input=x, name='num_roi_level{}'.format(i + 2))
                      for i, x in enumerate(level_ids)]
     add_moving_summary(*num_in_levels)
 
@@ -119,7 +119,7 @@ def multilevel_roi_align(features, rcnn_boxes, resolution):
 
     # Crop patches from corresponding levels
     for i, boxes, featuremap in zip(itertools.count(), level_boxes, features):
-        with tf.name_scope('roi_level{}'.format(i + 2)):
+        with tf.compat.v1.name_scope('roi_level{}'.format(i + 2)):
             boxes_on_featuremap = boxes * (1.0 / cfg.FPN.ANCHOR_STRIDES[i])
             all_rois.append(roi_align(featuremap, boxes_on_featuremap, resolution))
 
@@ -127,7 +127,7 @@ def multilevel_roi_align(features, rcnn_boxes, resolution):
     all_rois = tf.concat(all_rois, axis=0)  # NCHW
     # Unshuffle to the original order, to match the original samples
     level_id_perm = tf.concat(level_ids, axis=0)  # A permutation of 1~N
-    level_id_invert_perm = tf.invert_permutation(level_id_perm)
+    level_id_invert_perm = tf.math.invert_permutation(level_id_perm)
     all_rois = tf.gather(all_rois, level_id_invert_perm, name="output")
     return all_rois
 
@@ -148,7 +148,7 @@ def multilevel_rpn_losses_ori(
     assert len(multilevel_box_logits) == num_lvl
 
     losses = []
-    with tf.name_scope('rpn_losses'):
+    with tf.compat.v1.name_scope('rpn_losses'):
         for lvl in range(num_lvl):
             anchors = multilevel_anchors[lvl]
             label_loss, box_loss = rpn_losses_ori(
@@ -179,7 +179,7 @@ def multilevel_rpn_losses(
     assert len(multilevel_box_logits) == num_lvl
 
     losses = []
-    with tf.name_scope('rpn_losses'):
+    with tf.compat.v1.name_scope('rpn_losses'):
         for lvl in range(num_lvl):
             anchors = multilevel_anchors[lvl]
             label_loss, box_loss = rpn_losses(
@@ -217,7 +217,7 @@ def generate_fpn_proposals_ori(
     if cfg.FPN.PROPOSAL_MODE == 'Level':
         fpn_nms_topk = cfg.RPN.TRAIN_PER_LEVEL_NMS_TOPK if training else cfg.RPN.TEST_PER_LEVEL_NMS_TOPK
         for lvl in range(num_lvl):
-            with tf.name_scope('Lvl{}'.format(lvl + 2)):
+            with tf.compat.v1.name_scope('Lvl{}'.format(lvl + 2)):
                 pred_boxes_decoded = multilevel_pred_boxes[lvl]
 
                 proposal_boxes, proposal_scores = generate_rpn_proposals(
@@ -231,12 +231,12 @@ def generate_fpn_proposals_ori(
         proposal_scores = tf.concat(all_scores, axis=0)  # n
         # Here we are different from Detectron.
         # Detectron picks top-k within the batch, rather than within an image. However we do not have a batch.
-        proposal_topk = tf.minimum(tf.size(proposal_scores), fpn_nms_topk)
+        proposal_topk = tf.minimum(tf.size(input=proposal_scores), fpn_nms_topk)
         proposal_scores, topk_indices = tf.nn.top_k(proposal_scores, k=proposal_topk, sorted=False)
         proposal_boxes = tf.gather(proposal_boxes, topk_indices, name="all_proposals")
     else:
         for lvl in range(num_lvl):
-            with tf.name_scope('Lvl{}'.format(lvl + 2)):
+            with tf.compat.v1.name_scope('Lvl{}'.format(lvl + 2)):
                 pred_boxes_decoded = multilevel_pred_boxes[lvl]
                 all_boxes.append(tf.reshape(pred_boxes_decoded, [-1, 4]))
                 all_scores.append(tf.reshape(multilevel_label_logits[lvl], [-1]))
@@ -274,7 +274,7 @@ def generate_fpn_proposals(
     if cfg.FPN.PROPOSAL_MODE == 'Level':
         fpn_nms_topk = cfg.RPN.TRAIN_PER_LEVEL_NMS_TOPK if training else cfg.RPN.TEST_PER_LEVEL_NMS_TOPK
         for lvl in range(num_lvl):
-            with tf.name_scope('Lvl{}'.format(lvl + 2)):
+            with tf.compat.v1.name_scope('Lvl{}'.format(lvl + 2)):
                 # Filter here
 
                 mask = masks[lvl]
@@ -283,13 +283,13 @@ def generate_fpn_proposals(
                 pred_boxes_decoded = multilevel_pred_boxes[lvl]
                 pred_boxes_decoded_cur = tf.reshape(pred_boxes_decoded, [-1, 4])
                 print("before: pred_boxes_decoded_cur_shape = ", pred_boxes_decoded_cur.get_shape().as_list())
-                pred_boxes_decoded_cur = tf.boolean_mask(pred_boxes_decoded_cur, mask)
+                pred_boxes_decoded_cur = tf.boolean_mask(tensor=pred_boxes_decoded_cur, mask=mask)
                 print("after: pred_boxes_decoded_cur_shape = ",
                       pred_boxes_decoded_cur.get_shape().as_list())
                 multilevel_label_logits_cur = tf.reshape(multilevel_label_logits[lvl], [-1])
                 print("before: multilevel_label_logits_cur_shape = ",
                       multilevel_label_logits_cur.get_shape().as_list())
-                multilevel_label_logits_cur = tf.boolean_mask(multilevel_label_logits_cur, mask)
+                multilevel_label_logits_cur = tf.boolean_mask(tensor=multilevel_label_logits_cur, mask=mask)
                 print("after: multilevel_label_logits_cur_shape = ",
                       multilevel_label_logits_cur.get_shape().as_list())
 
@@ -306,12 +306,12 @@ def generate_fpn_proposals(
         proposal_scores = tf.concat(all_scores, axis=0)  # n
         # Here we are different from Detectron.
         # Detectron picks top-k within the batch, rather than within an image. However we do not have a batch.
-        proposal_topk = tf.minimum(tf.size(proposal_scores), fpn_nms_topk)
+        proposal_topk = tf.minimum(tf.size(input=proposal_scores), fpn_nms_topk)
         proposal_scores, topk_indices = tf.nn.top_k(proposal_scores, k=proposal_topk, sorted=False)
         proposal_boxes = tf.gather(proposal_boxes, topk_indices, name="all_proposals")
     else:
         for lvl in range(num_lvl):
-            with tf.name_scope('Lvl{}'.format(lvl + 2)):
+            with tf.compat.v1.name_scope('Lvl{}'.format(lvl + 2)):
                 pred_boxes_decoded = multilevel_pred_boxes[lvl]
                 all_boxes.append(tf.reshape(pred_boxes_decoded, [-1, 4]))
                 all_scores.append(tf.reshape(multilevel_label_logits[lvl], [-1]))

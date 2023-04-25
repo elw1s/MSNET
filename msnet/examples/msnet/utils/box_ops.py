@@ -38,11 +38,11 @@ def pairwise_intersection(boxlist1, boxlist2):
     """
     x_min1, y_min1, x_max1, y_max1 = tf.split(boxlist1, 4, axis=1)
     x_min2, y_min2, x_max2, y_max2 = tf.split(boxlist2, 4, axis=1)
-    all_pairs_min_ymax = tf.minimum(y_max1, tf.transpose(y_max2))
-    all_pairs_max_ymin = tf.maximum(y_min1, tf.transpose(y_min2))
+    all_pairs_min_ymax = tf.minimum(y_max1, tf.transpose(a=y_max2))
+    all_pairs_max_ymin = tf.maximum(y_min1, tf.transpose(a=y_min2))
     intersect_heights = tf.maximum(0.0, all_pairs_min_ymax - all_pairs_max_ymin)
-    all_pairs_min_xmax = tf.minimum(x_max1, tf.transpose(x_max2))
-    all_pairs_max_xmin = tf.maximum(x_min1, tf.transpose(x_min2))
+    all_pairs_min_xmax = tf.minimum(x_max1, tf.transpose(a=x_max2))
+    all_pairs_max_xmin = tf.maximum(x_min1, tf.transpose(a=x_min2))
     intersect_widths = tf.maximum(0.0, all_pairs_min_xmax - all_pairs_max_xmin)
     return intersect_heights * intersect_widths
 
@@ -63,7 +63,7 @@ def pairwise_iou(boxlist1, boxlist2):
     areas2 = area(boxlist2)
     unions = (
         tf.expand_dims(areas1, 1) + tf.expand_dims(areas2, 0) - intersections)
-    return tf.where(
+    return tf.compat.v1.where(
         tf.equal(intersections, 0.0),
         tf.zeros_like(intersections), tf.truediv(intersections, unions))
 
@@ -85,12 +85,12 @@ def pairwise_inner(boxlist1, boxlist2):
     # len_areas2 = boxlist2.get_shape().as_list()[0]
     # len_areas2 = tf.shape(boxlist2)[0]
     # zero_gen = tf.convert_to_tensor([0.0]*len_areas2, dtype=tf.float64)
-    zero_gen = tf.zeros(tf.shape(boxlist2)[0], tf.float32)
+    zero_gen = tf.zeros(tf.shape(input=boxlist2)[0], tf.float32)
     areas1_exp = tf.expand_dims(areas1, 1) + tf.expand_dims(zero_gen, 0)
 
     # areas2 = area(boxlist2)
     # unions = (
     #     tf.expand_dims(areas1, 1) + tf.expand_dims(areas2, 0) - intersections)
-    return tf.where(
+    return tf.compat.v1.where(
         tf.equal(intersections, 0.0),
         tf.zeros_like(intersections), tf.truediv(intersections, areas1_exp))

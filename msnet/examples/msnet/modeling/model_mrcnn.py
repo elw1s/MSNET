@@ -25,33 +25,33 @@ def maskrcnn_loss(mask_logits, fg_labels, fg_target_masks):
             mask_logits, tf.reshape(fg_labels - 1, [-1, 1]), batch_dims=1)
         mask_logits = tf.squeeze(mask_logits, axis=1)
     else:
-        indices = tf.stack([tf.range(tf.size(fg_labels, out_type=tf.int64)),
+        indices = tf.stack([tf.range(tf.size(input=fg_labels, out_type=tf.int64)),
                             fg_labels - 1], axis=1)  # #fgx2
         mask_logits = tf.gather_nd(mask_logits, indices)  # #fg x h x w
 
     mask_probs = tf.sigmoid(mask_logits)
 
     # add some training visualizations to tensorboard
-    with tf.name_scope('mask_viz'):
+    with tf.compat.v1.name_scope('mask_viz'):
         viz = tf.concat([fg_target_masks, mask_probs], axis=1)
         viz = tf.expand_dims(viz, 3)
         viz = tf.cast(viz * 255, tf.uint8, name='viz')
-        tf.summary.image('mask_truth|pred', viz, max_outputs=10)
+        tf.compat.v1.summary.image('mask_truth|pred', viz, max_outputs=10)
 
     loss = tf.nn.sigmoid_cross_entropy_with_logits(
         labels=fg_target_masks, logits=mask_logits)
-    loss = tf.reduce_mean(loss, name='maskrcnn_loss')
+    loss = tf.reduce_mean(input_tensor=loss, name='maskrcnn_loss')
 
     pred_label = mask_probs > 0.5
     truth_label = fg_target_masks > 0.5
     accuracy = tf.reduce_mean(
-        tf.cast(tf.equal(pred_label, truth_label), tf.float32),
+        input_tensor=tf.cast(tf.equal(pred_label, truth_label), tf.float32),
         name='accuracy')
     pos_accuracy = tf.logical_and(
         tf.equal(pred_label, truth_label),
         tf.equal(truth_label, True))
-    pos_accuracy = tf.reduce_mean(tf.cast(pos_accuracy, tf.float32), name='pos_accuracy')
-    fg_pixel_ratio = tf.reduce_mean(tf.cast(truth_label, tf.float32), name='fg_pixel_ratio')
+    pos_accuracy = tf.reduce_mean(input_tensor=tf.cast(pos_accuracy, tf.float32), name='pos_accuracy')
+    fg_pixel_ratio = tf.reduce_mean(input_tensor=tf.cast(truth_label, tf.float32), name='fg_pixel_ratio')
 
     add_moving_summary(loss, accuracy, fg_pixel_ratio, pos_accuracy)
     return loss
@@ -72,7 +72,7 @@ def maskrcnn_upXconv_head(feature, num_category, num_convs, norm=None):
     assert norm in [None, 'GN'], norm
     l = feature
     with argscope([Conv2D, Conv2DTranspose], data_format='channels_first',
-                  kernel_initializer=tf.variance_scaling_initializer(
+                  kernel_initializer=tf.compat.v1.variance_scaling_initializer(
                       scale=2.0, mode='fan_out',
                       distribution='untruncated_normal' if get_tf_version_tuple() >= (1, 12) else 'normal')):
         # c2's MSRAFill is fan_out
@@ -81,7 +81,7 @@ def maskrcnn_upXconv_head(feature, num_category, num_convs, norm=None):
             if norm is not None:
                 l = GroupNorm('gn{}'.format(k), l)
         l = Conv2DTranspose('deconv', l, cfg.MRCNN.HEAD_DIM, 2, strides=2, activation=tf.nn.relu)
-        l = Conv2D('conv', l, num_category, 1, kernel_initializer=tf.random_normal_initializer(stddev=0.001))
+        l = Conv2D('conv', l, num_category, 1, kernel_initializer=tf.compat.v1.random_normal_initializer(stddev=0.001))
     return l
 
 
@@ -108,5 +108,5 @@ def unpackbits_masks(masks):
     unpacked = tf.bitwise.bitwise_and(tf.expand_dims(masks, -1), bits) > 0
     unpacked = tf.reshape(
         unpacked,
-        tf.concat([tf.shape(masks)[:-1], [8 * tf.shape(masks)[-1]]], axis=0))
+        tf.concat([tf.shape(input=masks)[:-1], [8 * tf.shape(input=masks)[-1]]], axis=0))
     return unpacked

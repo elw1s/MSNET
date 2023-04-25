@@ -48,7 +48,7 @@ def load_pred(path, img_id):
 
 def roi_rsts(imgs_dict, rst_file_path, pred_path, roi_path):
 
-    with tf.Session() as sess:
+    with tf.compat.v1.Session() as sess:
         rst_file = rst_file_path
         with open(rst_file) as file:
             rst_data = json.load(file)

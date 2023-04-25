@@ -1,5 +1,5 @@
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
+tf.compat.v1.disable_v2_behavior()
 
 import sys
 sys.path.append("")
@@ -38,8 +38,8 @@ def main():
         fc_model_train.load_weights(
            FLAGS.model_load_path)
 
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+    with tf.compat.v1.Session() as sess:
+        sess.run(tf.compat.v1.global_variables_initializer())
         fc_model_train.load_weights(FLAGS.model_load_path)
         val_lst = load_val_lst(FLAGS.total_val)
         for ind, val_num in enumerate(val_lst):

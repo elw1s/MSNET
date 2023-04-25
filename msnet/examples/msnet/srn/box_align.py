@@ -33,17 +33,17 @@ def fpn_map_rois_to_levels(boxes):
     """
     sqrtarea = tf.sqrt(tf_area(boxes))
     level = tf.cast(tf.floor(
-        4 + tf.log(sqrtarea * (1. / 224) + 1e-6) * (1.0 / np.log(2))), tf.int32)
+        4 + tf.math.log(sqrtarea * (1. / 224) + 1e-6) * (1.0 / np.log(2))), tf.int32)
 
     # RoI levels range from 2~5 (not 6)
     level_ids = [
-        tf.where(level <= 2),
-        tf.where(tf.equal(level, 3)),   # == is not supported
-        tf.where(tf.equal(level, 4)),
-        tf.where(level >= 5)]
+        tf.compat.v1.where(level <= 2),
+        tf.compat.v1.where(tf.equal(level, 3)),   # == is not supported
+        tf.compat.v1.where(tf.equal(level, 4)),
+        tf.compat.v1.where(level >= 5)]
     level_ids = [tf.reshape(x, [-1], name='roi_level{}_id'.format(i + 2))
                  for i, x in enumerate(level_ids)]
-    num_in_levels = [tf.size(x, name='num_roi_level{}'.format(i + 2))
+    num_in_levels = [tf.size(input=x, name='num_roi_level{}'.format(i + 2))
                      for i, x in enumerate(level_ids)]
     # add_moving_summary(*num_in_levels)
 
@@ -69,7 +69,7 @@ def crop_and_resize(image, boxes, box_ind, crop_size, pad_border=True):
     # TF's crop_and_resize produces zeros on border
     if pad_border:
         # this can be quite slow
-        image = tf.pad(image, [[0, 0], [0, 0], [1, 1], [1, 1]], mode='SYMMETRIC')
+        image = tf.pad(tensor=image, paddings=[[0, 0], [0, 0], [1, 1], [1, 1]], mode='SYMMETRIC')
         boxes = boxes + 1
 
     # @under_name_scope()
@@ -105,14 +105,14 @@ def crop_and_resize(image, boxes, box_ind, crop_size, pad_border=True):
 
         return tf.concat([ny0, nx0, ny0 + nh, nx0 + nw], axis=1)
 
-    image_shape = tf.shape(image)[2:]
+    image_shape = tf.shape(input=image)[2:]
 
     boxes = transform_fpcoor_for_tf(boxes, image_shape, [crop_size, crop_size])
-    image = tf.transpose(image, [0, 2, 3, 1])   # nhwc
+    image = tf.transpose(a=image, perm=[0, 2, 3, 1])   # nhwc
     ret = tf.image.crop_and_resize(
         image, boxes, tf.cast(box_ind, tf.int32),
         crop_size=[crop_size, crop_size])
-    ret = tf.transpose(ret, [0, 3, 1, 2])   # ncss
+    ret = tf.transpose(a=ret, perm=[0, 3, 1, 2])   # ncss
     return ret
 
 
@@ -129,12 +129,12 @@ def roi_align(featuremap, boxes, resolution):
     # sample 4 locations per roi bin
     ret = crop_and_resize(
         featuremap, boxes,
-        tf.zeros([tf.shape(boxes)[0]], dtype=tf.int32),
+        tf.zeros([tf.shape(input=boxes)[0]], dtype=tf.int32),
         resolution * 2)
     try:
         avgpool = tf.nn.avg_pool2d
     except AttributeError:
-        avgpool = tf.nn.avg_pool
+        avgpool = tf.nn.avg_pool2d
     ret = avgpool(ret, [1, 1, 2, 2], [1, 1, 2, 2], padding='SAME', data_format='NCHW')
     return ret
 
@@ -162,7 +162,7 @@ def multilevel_roi_align(features, rcnn_boxes, resolution):
 
     # Crop patches from corresponding levels
     for i, boxes, featuremap in zip(itertools.count(), level_boxes, features):
-        with tf.name_scope('roi_level{}'.format(i + 2)):
+        with tf.compat.v1.name_scope('roi_level{}'.format(i + 2)):
             boxes_on_featuremap = boxes * (1.0 / ANCHOR_STRIDES[i])
             all_rois.append(roi_align(featuremap, boxes_on_featuremap, resolution))
 
@@ -170,6 +170,6 @@ def multilevel_roi_align(features, rcnn_boxes, resolution):
     all_rois = tf.concat(all_rois, axis=0)  # NCHW
     # Unshuffle to the original order, to match the original samples
     level_id_perm = tf.concat(level_ids, axis=0)  # A permutation of 1~N
-    level_id_invert_perm = tf.invert_permutation(level_id_perm)
+    level_id_invert_perm = tf.math.invert_permutation(level_id_perm)
     all_rois = tf.gather(all_rois, level_id_invert_perm, name="output")
     return all_rois

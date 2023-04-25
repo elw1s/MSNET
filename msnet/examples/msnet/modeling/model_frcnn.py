@@ -26,14 +26,14 @@ def proposal_metrics(iou):
         iou: nxm, #proposal x #gt
     """
     # find best roi for each gt, for summary only
-    best_iou = tf.reduce_max(iou, axis=0)
-    mean_best_iou = tf.reduce_mean(best_iou, name='best_iou_per_gt')
+    best_iou = tf.reduce_max(input_tensor=iou, axis=0)
+    mean_best_iou = tf.reduce_mean(input_tensor=best_iou, name='best_iou_per_gt')
     summaries = [mean_best_iou]
     with tf.device('/cpu:0'):
         for th in [0.3, 0.5]:
             recall = tf.truediv(
-                tf.count_nonzero(best_iou >= th),
-                tf.size(best_iou, out_type=tf.int64),
+                tf.math.count_nonzero(best_iou >= th),
+                tf.size(input=best_iou, out_type=tf.int64),
                 name='recall_iou{}'.format(th))
             summaries.append(recall)
     add_moving_summary(*summaries)
@@ -62,25 +62,25 @@ def sample_fast_rcnn_targets(boxes, gt_boxes, gt_labels):
 
     # add ground truth as proposals as well
     boxes = tf.concat([boxes, gt_boxes], axis=0)    # (n+m) x 4
-    iou = tf.concat([iou, tf.eye(tf.shape(gt_boxes)[0])], axis=0)   # (n+m) x m
+    iou = tf.concat([iou, tf.eye(tf.shape(input=gt_boxes)[0])], axis=0)   # (n+m) x m
     # #proposal=n+m from now on
 
     def sample_fg_bg(iou):
-        fg_mask = tf.cond(tf.shape(iou)[1] > 0,
-                          lambda: tf.reduce_max(iou, axis=1) >= cfg.FRCNN.FG_THRESH,
-                          lambda: tf.zeros([tf.shape(iou)[0]], dtype=tf.bool))
+        fg_mask = tf.cond(pred=tf.shape(input=iou)[1] > 0,
+                          true_fn=lambda: tf.reduce_max(input_tensor=iou, axis=1) >= cfg.FRCNN.FG_THRESH,
+                          false_fn=lambda: tf.zeros([tf.shape(input=iou)[0]], dtype=tf.bool))
 
-        fg_inds = tf.reshape(tf.where(fg_mask), [-1])
+        fg_inds = tf.reshape(tf.compat.v1.where(fg_mask), [-1])
         num_fg = tf.minimum(int(
             cfg.FRCNN.BATCH_PER_IM * cfg.FRCNN.FG_RATIO),
-            tf.size(fg_inds), name='num_fg')
-        fg_inds = tf.random_shuffle(fg_inds)[:num_fg]
+            tf.size(input=fg_inds), name='num_fg')
+        fg_inds = tf.random.shuffle(fg_inds)[:num_fg]
 
-        bg_inds = tf.reshape(tf.where(tf.logical_not(fg_mask)), [-1])
+        bg_inds = tf.reshape(tf.compat.v1.where(tf.logical_not(fg_mask)), [-1])
         num_bg = tf.minimum(
             cfg.FRCNN.BATCH_PER_IM - num_fg,
-            tf.size(bg_inds), name='num_bg')
-        bg_inds = tf.random_shuffle(bg_inds)[:num_bg]
+            tf.size(input=bg_inds), name='num_bg')
+        bg_inds = tf.random.shuffle(bg_inds)[:num_bg]
 
         add_moving_summary(num_fg, num_bg)
         return fg_inds, bg_inds
@@ -88,9 +88,9 @@ def sample_fast_rcnn_targets(boxes, gt_boxes, gt_labels):
     fg_inds, bg_inds = sample_fg_bg(iou)
     # fg,bg indices w.r.t proposals
 
-    best_iou_ind = tf.cond(tf.shape(iou)[1] > 0,
-                           lambda: tf.argmax(iou, axis=1),   # #proposal, each in 0~m-1
-                           lambda: tf.zeros([tf.shape(iou)[0]], dtype=tf.int64))
+    best_iou_ind = tf.cond(pred=tf.shape(input=iou)[1] > 0,
+                           true_fn=lambda: tf.argmax(input=iou, axis=1),   # #proposal, each in 0~m-1
+                           false_fn=lambda: tf.zeros([tf.shape(input=iou)[0]], dtype=tf.int64))
     fg_inds_wrt_gt = tf.gather(best_iou_ind, fg_inds)   # num_fg
 
     all_indices = tf.concat([fg_inds, bg_inds], axis=0)   # indices w.r.t all n+m proposal boxes
@@ -121,11 +121,11 @@ def fastrcnn_outputs(feature, num_categories, class_agnostic_regression=False):
     num_classes = num_categories + 1
     classification = FullyConnected(
         'class', feature, num_classes,
-        kernel_initializer=tf.random_normal_initializer(stddev=0.01))
+        kernel_initializer=tf.compat.v1.random_normal_initializer(stddev=0.01))
     num_classes_for_box = 1 if class_agnostic_regression else num_classes
     box_regression = FullyConnected(
         'box', feature, num_classes_for_box * 4,
-        kernel_initializer=tf.random_normal_initializer(stddev=0.001))
+        kernel_initializer=tf.compat.v1.random_normal_initializer(stddev=0.001))
     box_regression = tf.reshape(box_regression, (-1, num_classes_for_box, 4), name='output_box')
     return classification, box_regression
 
@@ -144,11 +144,11 @@ def fastrcnn_losses(labels, label_logits, fg_boxes, fg_box_logits):
     """
     label_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=labels, logits=label_logits)
-    label_loss = tf.reduce_mean(label_loss, name='label_loss')
+    label_loss = tf.reduce_mean(input_tensor=label_loss, name='label_loss')
 
-    fg_inds = tf.where(labels > 0)[:, 0]
+    fg_inds = tf.compat.v1.where(labels > 0)[:, 0]
     fg_labels = tf.gather(labels, fg_inds)
-    num_fg = tf.size(fg_inds, out_type=tf.int64)
+    num_fg = tf.size(input=fg_inds, out_type=tf.int64)
     empty_fg = tf.equal(num_fg, 0)
     if int(fg_box_logits.shape[1]) > 1:
         if get_tf_version_tuple() >= (1, 14):
@@ -159,20 +159,20 @@ def fastrcnn_losses(labels, label_logits, fg_boxes, fg_box_logits):
             fg_box_logits = tf.gather_nd(fg_box_logits, indices)
     fg_box_logits = tf.reshape(fg_box_logits, [-1, 4])  # nfg x 4
 
-    with tf.name_scope('label_metrics'), tf.device('/cpu:0'):
-        prediction = tf.argmax(label_logits, axis=1, name='label_prediction')
+    with tf.compat.v1.name_scope('label_metrics'), tf.device('/cpu:0'):
+        prediction = tf.argmax(input=label_logits, axis=1, name='label_prediction')
         correct = tf.cast(tf.equal(prediction, labels), tf.float32)  # boolean/integer gather is unavailable on GPU
-        accuracy = tf.reduce_mean(correct, name='accuracy')
-        fg_label_pred = tf.argmax(tf.gather(label_logits, fg_inds), axis=1)
-        num_zero = tf.reduce_sum(tf.cast(tf.equal(fg_label_pred, 0), tf.int64), name='num_zero')
-        false_negative = tf.where(
+        accuracy = tf.reduce_mean(input_tensor=correct, name='accuracy')
+        fg_label_pred = tf.argmax(input=tf.gather(label_logits, fg_inds), axis=1)
+        num_zero = tf.reduce_sum(input_tensor=tf.cast(tf.equal(fg_label_pred, 0), tf.int64), name='num_zero')
+        false_negative = tf.compat.v1.where(
             empty_fg, 0., tf.cast(tf.truediv(num_zero, num_fg), tf.float32), name='false_negative')
-        fg_accuracy = tf.where(
-            empty_fg, 0., tf.reduce_mean(tf.gather(correct, fg_inds)), name='fg_accuracy')
+        fg_accuracy = tf.compat.v1.where(
+            empty_fg, 0., tf.reduce_mean(input_tensor=tf.gather(correct, fg_inds)), name='fg_accuracy')
 
-    box_loss = tf.reduce_sum(tf.abs(fg_boxes - fg_box_logits))
+    box_loss = tf.reduce_sum(input_tensor=tf.abs(fg_boxes - fg_box_logits))
     box_loss = tf.truediv(
-        box_loss, tf.cast(tf.shape(labels)[0], tf.float32), name='box_loss')
+        box_loss, tf.cast(tf.shape(input=labels)[0], tf.float32), name='box_loss')
 
     add_moving_summary(label_loss, box_loss, accuracy,
                        fg_accuracy, false_negative, tf.cast(num_fg, tf.float32, name='num_fg_label'))
@@ -194,11 +194,11 @@ def fastrcnn_predictions(boxes, scores):
         labels: K
     """
     assert boxes.shape[1] == scores.shape[1]
-    boxes = tf.transpose(boxes, [1, 0, 2])[1:, :, :]  # #catxnx4
-    scores = tf.transpose(scores[:, 1:], [1, 0])  # #catxn
+    boxes = tf.transpose(a=boxes, perm=[1, 0, 2])[1:, :, :]  # #catxnx4
+    scores = tf.transpose(a=scores[:, 1:], perm=[1, 0])  # #catxn
 
-    max_coord = tf.reduce_max(boxes)
-    filtered_ids = tf.where(scores > cfg.TEST.RESULT_SCORE_THRESH)  # Fx2
+    max_coord = tf.reduce_max(input_tensor=boxes)
+    filtered_ids = tf.compat.v1.where(scores > cfg.TEST.RESULT_SCORE_THRESH)  # Fx2
     filtered_boxes = tf.gather_nd(boxes, filtered_ids)  # Fx4
     filtered_scores = tf.gather_nd(scores, filtered_ids)  # F,
     cls_per_box = tf.slice(filtered_ids, [0, 0], [-1, 1])
@@ -230,7 +230,7 @@ def fastrcnn_2fc_head(feature):
         2D head feature
     """
     dim = cfg.FPN.FRCNN_FC_HEAD_DIM
-    init = tf.variance_scaling_initializer()
+    init = tf.compat.v1.variance_scaling_initializer()
     hidden = FullyConnected('fc6', feature, dim, kernel_initializer=init, activation=tf.nn.relu)
     hidden = FullyConnected('fc7', hidden, dim, kernel_initializer=init, activation=tf.nn.relu)
     return hidden
@@ -251,7 +251,7 @@ def fastrcnn_Xconv1fc_head(feature, num_convs, norm=None):
     assert norm in [None, 'GN'], norm
     l = feature
     with argscope(Conv2D, data_format='channels_first',
-                  kernel_initializer=tf.variance_scaling_initializer(
+                  kernel_initializer=tf.compat.v1.variance_scaling_initializer(
                       scale=2.0, mode='fan_out',
                       distribution='untruncated_normal' if get_tf_version_tuple() >= (1, 12) else 'normal')):
         for k in range(num_convs):
@@ -259,7 +259,7 @@ def fastrcnn_Xconv1fc_head(feature, num_convs, norm=None):
             if norm is not None:
                 l = GroupNorm('gn{}'.format(k), l)
         l = FullyConnected('fc', l, cfg.FPN.FRCNN_FC_HEAD_DIM,
-                           kernel_initializer=tf.variance_scaling_initializer(), activation=tf.nn.relu)
+                           kernel_initializer=tf.compat.v1.variance_scaling_initializer(), activation=tf.nn.relu)
     return l
 
 
@@ -293,7 +293,7 @@ class BoxProposals(object):
     @memoized_method
     def fg_inds(self):
         """ Returns: #fg indices in [0, N-1] """
-        return tf.reshape(tf.where(self.labels > 0), [-1], name='fg_inds')
+        return tf.reshape(tf.compat.v1.where(self.labels > 0), [-1], name='fg_inds')
 
     @memoized_method
     def fg_boxes(self):
@@ -365,7 +365,7 @@ class FastRCNNHead(object):
     def decoded_output_boxes_for_label(self, labels):
         assert not self._bbox_class_agnostic
         indices = tf.stack([
-            tf.range(tf.size(labels, out_type=tf.int64)),
+            tf.range(tf.size(input=labels, out_type=tf.int64)),
             labels
         ])
         needed_logits = tf.gather_nd(self.box_logits, indices)
@@ -394,4 +394,4 @@ class FastRCNNHead(object):
     @memoized_method
     def predicted_labels(self):
         """ Returns: N ints """
-        return tf.argmax(self.label_logits, axis=1, name='predicted_labels')
+        return tf.argmax(input=self.label_logits, axis=1, name='predicted_labels')

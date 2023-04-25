@@ -41,15 +41,15 @@ class GeneralizedRCNN(ModelDesc):
     def preprocess(self, image):
         image = tf.expand_dims(image, 0)
         image = image_preprocess(image, bgr=True)
-        return tf.transpose(image, [0, 3, 1, 2])
+        return tf.transpose(a=image, perm=[0, 3, 1, 2])
 
     def optimizer(self):
-        lr = tf.get_variable('learning_rate', initializer=0.003, trainable=False)
-        tf.summary.scalar('learning_rate-summary', lr)
+        lr = tf.compat.v1.get_variable('learning_rate', initializer=0.003, trainable=False)
+        tf.compat.v1.summary.scalar('learning_rate-summary', lr)
 
         # The learning rate in the config is set for 8 GPUs, and we use trainers with average=False.
         lr = lr / 8.
-        opt = tf.train.MomentumOptimizer(lr, 0.9)
+        opt = tf.compat.v1.train.MomentumOptimizer(lr, 0.9)
         if cfg.TRAIN.NUM_GPUS < 8:
             opt = optimizer.AccumGradOptimizer(opt, 8 // cfg.TRAIN.NUM_GPUS)
         return opt
@@ -95,7 +95,7 @@ class GeneralizedRCNN(ModelDesc):
         # proposals = merge_bbox_proposals(proposals_house, proposals_damage)
         proposals = proposals_damage
         targets = [inputs[k] for k in ['gt_boxes_damage', 'gt_labels', 'gt_masks'] if k in inputs]
-        gt_boxes_area = tf.reduce_mean(tf_area(inputs["gt_boxes_damage"]), name='mean_gt_box_area')
+        gt_boxes_area = tf.reduce_mean(input_tensor=tf_area(inputs["gt_boxes_damage"]), name='mean_gt_box_area')
         add_moving_summary(gt_boxes_area)
         head_losses = self.roi_heads(image, features, proposals, targets)
 
@@ -109,7 +109,7 @@ class GeneralizedRCNN(ModelDesc):
         else:
             # Check that the model defines the tensors it declares for inference
             # For existing models, they are defined in "fastrcnn_predictions(name_scope='output')"
-            G = tf.get_default_graph()
+            G = tf.compat.v1.get_default_graph()
             ns = G.get_name_scope()
             for name in self.get_inference_tensor_names()[1]:
                 try:
@@ -147,7 +147,7 @@ class ResNetFPNModel(GeneralizedRCNN):
 
     def slice_feature_and_anchors(self, p23456, anchors):
         for i, stride in enumerate(cfg.FPN.ANCHOR_STRIDES):
-            with tf.name_scope('FPN_slice_lvl{}'.format(i)):
+            with tf.compat.v1.name_scope('FPN_slice_lvl{}'.format(i)):
                 anchors[i] = anchors[i].narrow_to(p23456[i])
 
     def backbone(self, image):
@@ -158,7 +158,7 @@ class ResNetFPNModel(GeneralizedRCNN):
     def rpn_house(self, image, features, inputs):
         assert len(cfg.RPN.ANCHOR_SIZES) == len(cfg.FPN.ANCHOR_STRIDES)
 
-        image_shape2d = tf.shape(image)[2:]     # h,w
+        image_shape2d = tf.shape(input=image)[2:]     # h,w
         all_anchors_fpn = get_all_anchors_fpn(
             strides=cfg.FPN.ANCHOR_STRIDES,
             sizes=cfg.RPN.ANCHOR_SIZES,
@@ -203,7 +203,7 @@ class ResNetFPNModel(GeneralizedRCNN):
         # Filter out the ones that are not within the house bbox
         assert len(cfg.RPN.ANCHOR_SIZES) == len(cfg.FPN.ANCHOR_STRIDES)
 
-        image_shape2d = tf.shape(image)[2:]     # h,w
+        image_shape2d = tf.shape(input=image)[2:]     # h,w
         all_anchors_fpn = get_all_anchors_fpn(
             strides=cfg.FPN.ANCHOR_STRIDES,
             sizes=cfg.RPN.ANCHOR_SIZES,
@@ -243,7 +243,7 @@ class ResNetFPNModel(GeneralizedRCNN):
         return BoxProposals(proposal_boxes), losses
 
     def roi_heads(self, image, features, proposals, targets):
-        image_shape2d = tf.shape(image)[2:]     # h,w
+        image_shape2d = tf.shape(input=image)[2:]     # h,w
         assert len(features) == 5, "Features have to be P23456!"
         gt_boxes, gt_labels, *_ = targets
 
@@ -300,7 +300,7 @@ class ResNetFPNModel(GeneralizedRCNN):
                 maskrcnn_head_func = getattr(model_mrcnn, cfg.FPN.MRCNN_HEAD_FUNC)
                 mask_logits = maskrcnn_head_func(
                     'maskrcnn', roi_feature_maskrcnn, cfg.DATA.NUM_CATEGORY)   # #fg x #cat x 28 x 28
-                indices = tf.stack([tf.range(tf.size(final_labels)), tf.cast(final_labels, tf.int32) - 1], axis=1)
+                indices = tf.stack([tf.range(tf.size(input=final_labels)), tf.cast(final_labels, tf.int32) - 1], axis=1)
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx28x28
                 tf.sigmoid(final_mask_logits, name='output/masks')
             return []
@@ -333,7 +333,7 @@ class ResNetC4Model(GeneralizedRCNN):
             inputs['anchor_labels'], inputs['anchor_boxes'])
         anchors = anchors.narrow_to(featuremap)
 
-        image_shape2d = tf.shape(image)[2:]     # h,w
+        image_shape2d = tf.shape(input=image)[2:]     # h,w
         pred_boxes_decoded = anchors.decode_logits(rpn_box_logits)  # fHxfWxNAx4, floatbox
         proposal_boxes, proposal_scores = generate_rpn_proposals(
             tf.reshape(pred_boxes_decoded, [-1, 4]),
@@ -351,7 +351,7 @@ class ResNetC4Model(GeneralizedRCNN):
         return BoxProposals(proposal_boxes), losses
 
     def roi_heads(self, image, features, proposals, targets):
-        image_shape2d = tf.shape(image)[2:]     # h,w
+        image_shape2d = tf.shape(input=image)[2:]     # h,w
         featuremap = features[0]
 
         gt_boxes, gt_labels, *_ = targets
@@ -404,7 +404,7 @@ class ResNetC4Model(GeneralizedRCNN):
                 feature_maskrcnn = resnet_conv5(roi_resized, cfg.BACKBONE.RESNET_NUM_BLOCKS[-1])
                 mask_logits = maskrcnn_upXconv_head(
                     'maskrcnn', feature_maskrcnn, cfg.DATA.NUM_CATEGORY, 0)   # #result x #cat x 14x14
-                indices = tf.stack([tf.range(tf.size(final_labels)), tf.cast(final_labels, tf.int32) - 1], axis=1)
+                indices = tf.stack([tf.range(tf.size(input=final_labels)), tf.cast(final_labels, tf.int32) - 1], axis=1)
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx14x14
                 tf.sigmoid(final_mask_logits, name='output/masks')
             return []
